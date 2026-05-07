@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         openi每日任务
 // @namespace    https://bbs.tampermonkey.net.cn/
-// @version      0.2.3
+// @version      0.2.4
 // @description  自动完成每日调试任务和commit任务，需要确保当前调试任务数量<=4，创建->停止->删除，需要到脚本内部设置program_path确定仓库的位置
 // @author       Tiosa
 // @license      MIT
@@ -98,7 +98,8 @@ return new Promise((resolve, reject) => {
                     switch (e.name) {
                         case "_csrf":
                             reqData._csrf = e.value;
-                            start_task(e.value);
+                            _csrf = e.value;
+                            start_task();
                             break;
                         case "last_commit":
                             reqData.last_commit = e.value;
@@ -185,12 +186,12 @@ return new Promise((resolve, reject) => {
             }
         });
     };
-    const start_task = (csrf) => {
+    const start_task = () => {
         if (is_created) return;
         is_created = true;
         GM_xmlhttpRequest({
             method: "POST",
-            url: site + create_path + "?_csrf=" + csrf,
+            url: site + create_path + "?_csrf=" + _csrf,
             headers: {
                 "Content-Type": "application/json"
             },
@@ -208,7 +209,7 @@ return new Promise((resolve, reject) => {
                 "dataset_uuid_str": "",
                 "has_internet": 2,
                 "spec_id": 347,
-                "_csrf": csrf
+                "_csrf": _csrf
             }),
             onload: res => {
                 GM_log("创建任务");
@@ -218,11 +219,13 @@ return new Promise((resolve, reject) => {
                     GM_log(id)
                     notifyStatus("创建成功，准备停止任务");
                     setTimeout(() => {
-                        requestStopUntilReady(id, csrf);
+                        requestStopUntilReady(id, _csrf);
                     }, 2000);
 
                 }
                 else {
+                    is_created = false;
+                    finish_status.commit_finish_count -= 1;
                     GM_log("创建任务失败:csrf错误");
                     notifyStatus("创建失败：csrf错误");
                 }
@@ -274,8 +277,11 @@ return new Promise((resolve, reject) => {
     GM_xmlhttpRequest({
         method: "GET",
         url: site,
-        onload: () => GM_log("请求网站")
+        onload: () => {
+            GM_log("请求网站");
+            commitTask();
+            monitor();
+        }
     });
-    commitTask();
-    monitor();
+    
 });
